@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: system-ui; padding: 20px; }
+  canvas { display: block; border: 1px solid #ccc; margin: 10px 0; max-width: 100%; }
+  button { padding: 8px 16px; margin-right: 8px; font-size: 14px; }
+  #info { color: #666; font-family: monospace; font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <input type="file" id="fileInput" accept="image/gif">
+  <br>
+  <canvas id="canvas"></canvas>
+  <button onclick="play()">Play</button>
+  <button onclick="pause()">Pause</button>
+  <button onclick="step(-1)">◀ Step</button>
+  <button onclick="step(1)">Step ▶</button>
+  <button onclick="saveFrame()">💾 Save Frame</button>
+  <div id="info">Pick a GIF to start.</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const info = document.getElementById('info');
+
+let frames = [];
+let frameIdx = 0;
+let playing = false;
+let timer = null;
+let baseName = 'frame';
+
+document.getElementById('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  pause();
+  frames = [];
+  frameIdx = 0;
+  baseName = file.name.replace(/\.gif$/i, '');
+  info.textContent = 'Reading file...';
+
+  const buffer = await file.arrayBuffer();
+  const decoder = new ImageDecoder({ data: buffer, type: 'image/gif' });
+  await decoder.tracks.ready;
+  await decoder.completed;
+
+  const track = decoder.tracks.selectedTrack;
+  const count = track.frameCount;
+  info.textContent = `Decoding ${count} frames...`;
+
+  for (let i = 0; i < count; i++) {
+    const { image } = await decoder.decode({ frameIndex: i });
+    const bitmap = await createImageBitmap(image);
+    const duration = image.duration ? image.duration / 1000 : 100;
+    frames.push({ bitmap, duration });
+  }
+
+  canvas.width = frames[0].bitmap.width;
+  canvas.height = frames[0].bitmap.height;
+  drawFrame(0);
+  info.textContent = `Loaded ${frames.length} frames (${canvas.width}×${canvas.height})`;
+  play();
+});
+
+function drawFrame(i) {
+  if (!frames.length) return;
+  frameIdx = ((i % frames.length) + frames.length) % frames.length;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(frames[frameIdx].bitmap, 0, 0);
+  info.textContent = `Frame ${frameIdx + 1} / ${frames.length}`;
+}
+
+function tick() {
+  if (!playing) return;
+  const dur = frames[frameIdx].duration;
+  timer = setTimeout(() => {
+    drawFrame(frameIdx + 1);
+    tick();
+  }, dur);
+}
+
+function play() {
+  if (!frames.length || playing) return;
+  playing = true;
+  tick();
+}
+
+function pause() {
+  playing = false;
+  if (timer) clearTimeout(timer);
+}
+
+function step(delta) {
+  if (!frames.length) return;
+  pause();
+  drawFrame(frameIdx + delta);
+}
+
+function saveFrame() {
+  if (!frames.length) return;
+  pause();
+  const pad = String(frames.length).length;
+  const num = String(frameIdx + 1).padStart(pad, '0');
+  const filename = `${baseName}_frame${num}.png`;
+  canvas.toBlob((blob) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+}
+</script>
+</body>
+</html>
