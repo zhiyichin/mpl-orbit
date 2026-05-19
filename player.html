@@ -17,26 +17,46 @@
   <button onclick="step(-1)">◀ Step</button>
   <button onclick="step(1)">Step ▶</button>
   <button onclick="saveFrame()">💾 Save Frame</button>
+  <button onclick="clearPlayer()">Clear</button>
   <div id="info">Pick a GIF to start.</div>
 
 <script>
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const info = document.getElementById('info');
+const fileInput = document.getElementById('fileInput');
 
 let frames = [];
 let frameIdx = 0;
 let playing = false;
 let timer = null;
 let baseName = 'frame';
+const EMPTY_W = 300;
+const EMPTY_H = 150;
 
-document.getElementById('fileInput').addEventListener('change', async (e) => {
+function releaseFrames() {
+  pause();
+  for (const { bitmap } of frames) bitmap.close();
+  frames = [];
+  frameIdx = 0;
+}
+
+function clearPlayer() {
+  releaseFrames();
+  baseName = 'frame';
+  canvas.width = EMPTY_W;
+  canvas.height = EMPTY_H;
+  ctx.clearRect(0, 0, EMPTY_W, EMPTY_H);
+  fileInput.value = '';
+  info.textContent = 'Pick a GIF to start.';
+}
+
+fileInput.addEventListener('click', () => { fileInput.value = ''; });
+fileInput.addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
 
-  pause();
-  frames = [];
-  frameIdx = 0;
+  releaseFrames();
   baseName = file.name.replace(/\.gif$/i, '');
   info.textContent = 'Reading file...';
 
